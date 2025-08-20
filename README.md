@@ -1,3 +1,4 @@
+## 👋 Hey, I am Muhammad Haider 
 I'm a 22-year-old data science aficionado hailing from the vibrant city of Islamabad, Pakistan. 🌆 Armed with a love for all things data and artificial intelligence, I'm on a mission to conquer the world of analytics with my scientific prowess. 👨🏼‍💻
 
 <br>
@@ -24,6 +25,8 @@ I'm a 22-year-old data science aficionado hailing from the vibrant city of Islam
 ![Flask](https://img.shields.io/badge/Flask-000000?style=for-the-badge&logo=flask&logoColor=white) 
 ![FastAPI](https://img.shields.io/badge/FastAPI-009688?style=for-the-badge&logo=fastapi&logoColor=white)  
 ![n8n](https://img.shields.io/badge/n8n-EA4E83?style=for-the-badge&logo=n8n&logoColor=white) 
+![Make](https://img.shields.io/badge/Make-2F8CBB?style=for-the-badge&logo=make&logoColor=white) 
+![Zapier](https://img.shields.io/badge/Zapier-FF4A00?style=for-the-badge&logo=zapier&logoColor=white) 
 
 ![TensorFlow](https://img.shields.io/badge/TensorFlow-FF6F00?style=for-the-badge&logo=tensorflow&logoColor=white) 
 ![Keras](https://img.shields.io/badge/Keras-D00000?style=for-the-badge&logo=keras&logoColor=white) 
@@ -53,6 +56,7 @@ I'm a 22-year-old data science aficionado hailing from the vibrant city of Islam
 ![](https://github-readme-streak-stats.herokuapp.com/?user=muhammadhaider02&theme=merko&hide_border=false)  
 ![](https://github-readme-stats.vercel.app/api/top-langs/?username=muhammadhaider02&theme=merko&hide_border=false&layout=compact)  
 
+##
 <br>
 <div align="center">
     <a href="https://git.io/typing-svg"><img src="https://readme-typing-svg.demolab.com?font=Poppins&weight=600&size=25&pause=1000&color=EBD665&center=true&width=435&lines=To+infinity...+and+beyond!+%F0%9F%9A%80" alt="Typing SVG" /></a>
