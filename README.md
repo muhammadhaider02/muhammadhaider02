@@ -53,15 +53,9 @@ I'm a 22-year-old data science aficionado hailing from the vibrant city of Islam
 ## 📊 GitHub Stats  
 <p align="center">
   <img src="https://github-readme-stats.vercel.app/api?username=muhammadhaider02&theme=merko&hide_border=false&include_all_commits=true&count_private=true" alt="GitHub Stats" />
-</p>
-
-<p align="center">
   <img src="https://github-readme-streak-stats.herokuapp.com/?user=muhammadhaider02&theme=merko&hide_border=false" alt="GitHub Streak" />
-</p>
-
-<p align="center">
   <img src="https://github-readme-stats.vercel.app/api/top-langs/?username=muhammadhaider02&theme=merko&hide_border=false&layout=compact" alt="Top Languages" />
-</p> 
+</p>
 
 ##
 <br>
