@@ -61,7 +61,7 @@ I'm a 22-year-old data science aficionado hailing from the vibrant city of Islam
 
 <p align="center">
   <img src="https://github-readme-stats.vercel.app/api/top-langs/?username=muhammadhaider02&theme=merko&hide_border=false&layout=compact" alt="Top Languages" />
-</p>  
+</p> 
 
 ##
 <br>
