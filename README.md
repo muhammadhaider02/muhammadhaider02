@@ -47,12 +47,21 @@ I'm a 22-year-old data science aficionado hailing from the vibrant city of Islam
 ![Git](https://img.shields.io/badge/Git-F05032?style=for-the-badge&logo=git&logoColor=white)  
 
 ![Tableau](https://img.shields.io/badge/Tableau-E97627?style=for-the-badge&logo=tableau&logoColor=white) 
-![Power BI](https://img.shields.io/badge/Power_BI-F2C811?style=for-the-badge&logo=powerbi&logoColor=black)  
+![Power BI](https://img.shields.io/badge/Power_BI-F2C811?style=for-the-badge&logo=powerbi&logoColor=black)
+![D3.js](https://img.shields.io/badge/D3.js-F9A03C?style=for-the-badge&logo=d3.js&logoColor=white)
 
 ## 📊 GitHub Stats  
-![](https://github-readme-stats.vercel.app/api?username=muhammadhaider02&theme=merko&hide_border=false&include_all_commits=true&count_private=true)  
-![](https://github-readme-streak-stats.herokuapp.com/?user=muhammadhaider02&theme=merko&hide_border=false)  
-![](https://github-readme-stats.vercel.app/api/top-langs/?username=muhammadhaider02&theme=merko&hide_border=false&layout=compact)  
+<p align="center">
+  <img src="https://github-readme-stats.vercel.app/api?username=muhammadhaider02&theme=merko&hide_border=false&include_all_commits=true&count_private=true" alt="GitHub Stats" />
+</p>
+
+<p align="center">
+  <img src="https://github-readme-streak-stats.herokuapp.com/?user=muhammadhaider02&theme=merko&hide_border=false" alt="GitHub Streak" />
+</p>
+
+<p align="center">
+  <img src="https://github-readme-stats.vercel.app/api/top-langs/?username=muhammadhaider02&theme=merko&hide_border=false&layout=compact" alt="Top Languages" />
+</p>  
 
 ##
 <br>
