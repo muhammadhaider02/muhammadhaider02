@@ -53,8 +53,7 @@ I'm a 22-year-old data science aficionado hailing from the vibrant city of Islam
 ![](https://github-readme-streak-stats.herokuapp.com/?user=muhammadhaider02&theme=merko&hide_border=false)  
 ![](https://github-readme-stats.vercel.app/api/top-langs/?username=muhammadhaider02&theme=merko&hide_border=false&layout=compact)  
 
-## ✨ About Me  
-- 🤖 AI Engineer passionate about **Machine Learning & Deep Learning**  
-- 🌱 Currently exploring **MLOps & Cloud Computing**  
-- ⚡ Loves solving real-world problems with AI  
-- ☕ Fueled by tea & curiosity  
+<br>
+<div align="center">
+    <a href="https://git.io/typing-svg"><img src="https://readme-typing-svg.demolab.com?font=Poppins&weight=600&size=25&pause=1000&color=EBD665&center=true&width=435&lines=To+infinity...+and+beyond!+%F0%9F%9A%80" alt="Typing SVG" /></a>
+</div>
