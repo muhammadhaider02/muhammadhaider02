@@ -1,11 +1,9 @@
 ## 👋 Hey, I am Muhammad Haider 
 I'm a 22-year-old data science aficionado hailing from the vibrant city of Islamabad, Pakistan. 🌆 Armed with a love for all things data and artificial intelligence, I'm on a mission to conquer the world of analytics with my scientific prowess. 👨🏼‍💻
 
-<br>
 <div align="center">
     <img src="https://komarev.com/ghpvc/?username=muhammadhaider02&&style=flat-square" align="center" />
 </div>
-<br>
 
 ## 🌐 Connect with Me  
 [![LinkedIn](https://img.shields.io/badge/LinkedIn-0A66C2?style=for-the-badge&logo=linkedin&logoColor=white)](https://www.linkedin.com/in/muhammadhaider02/) [![Gmail](https://img.shields.io/badge/Email-D14836?style=for-the-badge&logo=gmail&logoColor=white)](mailto:muhammadhaiderakbar@gmail.com)
