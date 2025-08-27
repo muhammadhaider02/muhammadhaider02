@@ -32,8 +32,8 @@ I'm a 22-year-old data science aficionado hailing from the vibrant city of Islam
 ![Scikit-learn](https://img.shields.io/badge/scikit--learn-F7931E?style=for-the-badge&logo=scikitlearn&logoColor=white) 
 ![OpenCV](https://img.shields.io/badge/OpenCV-5C3EE8?style=for-the-badge&logo=opencv&logoColor=white)  
 
-![LangChain](https://img.shields.io/badge/LangChain-1C3C3C?style=for-the-badge&logo=chainlink&logoColor=white)  
-![LangGraph](https://img.shields.io/badge/LangGraph-0A84FF?style=for-the-badge&logo=graph&logoColor=white)  
+![LangChain](https://img.shields.io/badge/LangChain-1C3C3C?style=for-the-badge&logo=chainlink&logoColor=white)
+![LangGraph](https://img.shields.io/badge/LangGraph-0A84FF?style=for-the-badge&logo=graph&logoColor=white)
 ![LangSmith](https://img.shields.io/badge/LangSmith-FF6F61?style=for-the-badge&logo=smith&logoColor=white)
 
 ![Apache Spark](https://img.shields.io/badge/Apache_Spark-E25A1C?style=for-the-badge&logo=apachespark&logoColor=white) 
