@@ -1,4 +1,6 @@
-## 👋 Hey, I am Muhammad Haider 
+<img src="https://camo.githubusercontent.com/1ecb2e9568d5f780044c7f401a8e54226e921a9fa74868131f82bb45872e0214/68747470733a2f2f63646e622e61727473746174696f6e2e636f6d2f702f6173736574732f696d616765732f696d616765732f3033362f3132352f3430352f6f726967696e616c2f69676f722d667265697461732d6d6573612e6769663f31363136373739353632" width="1000" height="400" />
+
+<h1 align="center">👋 Hey, I'm Muhammad Haider Akbar</h1>
 I'm a 22-year-old data science aficionado hailing from the vibrant city of Islamabad, Pakistan. 🌆 Armed with a love for all things data and artificial intelligence, I'm on a mission to conquer the world of analytics with my scientific prowess. 👨🏼‍💻
 
 <div align="center">
