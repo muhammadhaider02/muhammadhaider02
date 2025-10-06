@@ -62,3 +62,8 @@ I'm a 22-year-old data science aficionado hailing from the vibrant city of Islam
 <div align="center">
     <a href="https://git.io/typing-svg"><img src="https://readme-typing-svg.demolab.com?font=Poppins&weight=600&size=25&pause=1000&color=EBD665&center=true&width=435&lines=Sky+is+not+the+limit!+%F0%9F%9A%80" alt="Typing SVG" /></a>
 </div>
+
+##
+<p align = "center">
+	<img src = "https://github.com/7oSkaaa/7oSkaaa/blob/output/github-contribution-grid-snake-dark.svg" alt = "Snake Game"/>
+</p>
