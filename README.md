@@ -1,5 +1,3 @@
-<img src="https://camo.githubusercontent.com/1ecb2e9568d5f780044c7f401a8e54226e921a9fa74868131f82bb45872e0214/68747470733a2f2f63646e622e61727473746174696f6e2e636f6d2f702f6173736574732f696d616765732f696d616765732f3033362f3132352f3430352f6f726967696e616c2f69676f722d667265697461732d6d6573612e6769663f31363136373739353632" width="1000" height="400" />
-
 ## 👋 Hey, I am Muhammad Haider Akbar
 I'm a 22-year-old data science aficionado hailing from the vibrant city of Islamabad, Pakistan. 🌆 Armed with a love for all things data and artificial intelligence, I'm on a mission to conquer the world of analytics with my scientific prowess. 👨🏼‍💻
 
@@ -13,7 +11,6 @@ I'm a 22-year-old data science aficionado hailing from the vibrant city of Islam
 ## 🛠️ Languages & Tools   
 ![Python](https://img.shields.io/badge/Python-3776AB?style=for-the-badge&logo=python&logoColor=white) 
 ![C++](https://img.shields.io/badge/C++-00599C?style=for-the-badge&logo=cplusplus&logoColor=white) 
-![Java](https://img.shields.io/badge/Java-007396?style=for-the-badge&logo=openjdk&logoColor=white) 
 ![HTML5](https://img.shields.io/badge/HTML5-E34F26?style=for-the-badge&logo=html5&logoColor=white) 
 ![CSS3](https://img.shields.io/badge/CSS3-1572B6?style=for-the-badge&logo=css3&logoColor=white) 
 ![JavaScript](https://img.shields.io/badge/JavaScript-F7DF1E?style=for-the-badge&logo=javascript&logoColor=black)  
