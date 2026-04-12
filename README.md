@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="https://capsule-render.vercel.app/api?type=waving&color=gradient&height=280&section=header&text=Haider%20Akbar&fontSize=90&animation=fadeIn&fontAlignY=38&desc=AI,%20Automation,%20Data%20%EF%BC%86%20Systems%&descAlignY=53&descAlign=65" width="100%"/>
+  <img src="https://capsule-render.vercel.app/api?type=waving&color=gradient&height=280&section=header&text=Haider%20Akbar&fontSize=90&animation=fadeIn&fontAlignY=38&desc=AI,%20Agents,%20Data%20%EF%BC%86%20Systems%&descAlignY=53&descAlign=68" width="100%"/>
 
 [![LinkedIn](https://img.shields.io/badge/LinkedIn-0A66C2?style=for-the-badge&logo=linkedin&logoColor=white)](https://www.linkedin.com/in/haiderakbar/)
 [![Portfolio](https://img.shields.io/badge/Portfolio-0A192F?style=for-the-badge)](https://haiderakbar.dev)
