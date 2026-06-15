@@ -36,8 +36,7 @@
 ![Linux](https://img.shields.io/badge/Linux-FCC624?style=for-the-badge&logo=linux&logoColor=black)
 ![Git](https://img.shields.io/badge/Git-F05033?style=for-the-badge&logo=git&logoColor=white)
 
-![Profile Views](https://komarev.com/ghpvc/?username=muhammadhaider02&style=for-the-badge&color=0077B5&label=PROFILE+VIEWS) 
-[![Rankistan rank badge](https://img.shields.io/endpoint?url=https%3A%2F%2Frankistan-summary-api.academics-ali.workers.dev%2Fapi%2Fbadge%2Fmuhammadhaider02&style=for-the-badge)](https://rankistan.dev)
+![Profile Views](https://komarev.com/ghpvc/?username=muhammadhaider02&style=for-the-badge&color=0077B5&label=PROFILE+VIEWS)
 
 </div>
 
