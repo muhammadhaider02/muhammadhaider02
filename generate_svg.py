@@ -128,8 +128,8 @@ def right_panel():
              '<tspan class="value" id="commit_data">0</tspan> | <tspan class="key">Followers</tspan>:'
              '<tspan class="cc" id="follower_data_dots"> ......... </tspan>'
              '<tspan class="value" id="follower_data">0</tspan>')
-    r.append('<tspan x="390" y="510" class="cc">. </tspan><tspan class="key">Lines of Code on GitHub</tspan>:'
-             '<tspan class="cc" id="loc_data_dots"> ........ </tspan>'
+    r.append('<tspan x="390" y="510" class="cc">. </tspan><tspan class="key">Lines of Code</tspan>:'
+             '<tspan class="cc" id="loc_data_dots"> .............. </tspan>'
              '<tspan class="value" id="loc_data">0</tspan> ( <tspan class="addColor" id="loc_add">0</tspan>'
              '<tspan class="addColor">++</tspan>, <tspan id="loc_del_dots"> ...... </tspan>'
              '<tspan class="delColor" id="loc_del">0</tspan><tspan class="delColor">--</tspan> )')
