@@ -118,7 +118,7 @@ def right_panel():
     r.append(row(410, ['Location'], 'Islamabad, Pakistan'))
     r.append(f'<tspan x="390" y="450">{STATS_HDR}')
     r.append('<tspan x="390" y="470" class="cc">. </tspan><tspan class="key">Repos</tspan>:'
-             '<tspan class="cc" id="repo_data_dots"> ..... </tspan>'
+             '<tspan class="cc" id="repo_data_dots"> ...... </tspan>'
              '<tspan class="value" id="repo_data">0</tspan> {<tspan class="key">Contributed</tspan>: '
              '<tspan class="value" id="contrib_data">0</tspan>} | <tspan class="key">Stars</tspan>:'
              '<tspan class="cc" id="star_data_dots"> ............. </tspan>'
