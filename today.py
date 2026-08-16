@@ -43,10 +43,17 @@ def format_plural(unit):
 def simple_request(func_name, query, variables):
     """
     Returns a request, or raises an Exception if the response does not succeed.
+    Retries transient gateway errors (502/503/504), which GitHub's GraphQL API
+    returns intermittently on heavy queries like loc_query.
     """
-    request = requests.post('https://api.github.com/graphql', json={'query': query, 'variables':variables}, headers=HEADERS)
-    if request.status_code == 200:
-        return request
+    for attempt in range(5):
+        request = requests.post('https://api.github.com/graphql', json={'query': query, 'variables':variables}, headers=HEADERS)
+        if request.status_code == 200:
+            return request
+        if request.status_code in (502, 503, 504) and attempt < 4:
+            time.sleep(3 * (attempt + 1)) # back off (3s, 6s, 9s, 12s) then retry
+            continue
+        break
     raise Exception(func_name, ' has failed with a', request.status_code, request.text, QUERY_COUNT)
 
 
