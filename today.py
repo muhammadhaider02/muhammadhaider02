@@ -571,7 +571,11 @@ def svg_overwrite(filename, contributions_data, star_data, repo_data, contrib_da
     account for that text's width -- a fixed length silently misaligned the row whenever
     Contributed changed digits.
     """
-    tree = etree.parse(filename)
+    # Entity resolution off: lxml's default would expand a DOCTYPE entity pointing at a local
+    # file or URL, and svg_overwrite writes the tree straight back to a file the workflow
+    # publishes. Defence in depth -- planting that DOCTYPE needs push access already.
+    parser = etree.XMLParser(resolve_entities=False, no_network=True, load_dtd=False, huge_tree=False)
+    tree = etree.parse(filename, parser)
     root = tree.getroot()
     inset = f' {{Contributed: {contrib_data:,}}}'
     justify_format(root, 'repo_data', repo_data, layout.field_len('Repos', layout.L, extra=len(inset)))
