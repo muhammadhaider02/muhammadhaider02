@@ -38,6 +38,10 @@ jobs:
           CACHE_REPO: muhammadhaider02/readme-stats-cache  # private; holds the per-repo ledger
         run: python today.py
       - name: Commit
+        # always() so the daily commit lands even when the stats step fails. Every strict
+        # check runs before the SVGs are touched, so a failed run commits the previous
+        # values rather than a half-written card.
+        if: always()
         run: |-
           # Allowlist, not "git add ." : this repo is public, so anything the build
           # happens to leave in the tree would be published. Never widen this, and
@@ -46,5 +50,9 @@ jobs:
           git add -- dark_mode.svg light_mode.svg
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git config --global user.name "README-Bot"
-          git commit -m "docs: update README stats" -m "Co-authored-by: Haider Akbar <muhammadhaiderakbar@gmail.com>" || echo "No changes to commit"
+          # --allow-empty so the daily run always lands a commit. The card used to carry a
+          # value that changed every single day, which meant there was always a diff to
+          # commit; without it, a day with no new commits, stars or followers would produce
+          # no commit at all and break the daily cadence.
+          git commit --allow-empty -m "docs: update README stats" -m "Co-authored-by: Haider Akbar <muhammadhaiderakbar@gmail.com>"
           git push

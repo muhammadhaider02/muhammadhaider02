@@ -9,8 +9,10 @@ wide (360px total) and line step 7.5px keeps the same cell aspect ratio as the
 import html
 import os
 
+import layout
+
 REPO = os.path.dirname(os.path.abspath(__file__))
-ROW_WIDTH = 55  # chars available for key + dots + value (60 - '. ' - ':' - 2 spaces)
+ROW_WIDTH = layout.ROW_WIDTH  # chars available for key + dots + value (60 - '. ' - ':' - 2 spaces)
 
 PALETTES = {
     'dark_mode.svg': dict(key='#ffa657', value='#a5d6ff', add='#3fb950', dele='#f85149',
@@ -44,8 +46,31 @@ def blank(y):
     return f'<tspan x="390" y="{y}" class="cc">. </tspan>'
 
 
+def stat_row(y, left_key, left_id, right_key, right_id, inset=None, placeholder='0'):
+    """
+    One two-column stats line: '. LeftKey: ... value | RightKey: ... value'.
+
+    Column widths come from layout, and today.py re-pads the same dot spans from the same
+    numbers when it rewrites the values, so the '|' stays on one column in both rows.
+
+    `inset` is a second key/value pair sharing the left column -- the Repos row carries
+    ' {Contributed: N}' after its value, so that column's dot count must subtract the
+    inset's rendered width. A fixed dot count cannot express that, which is how the
+    separators drifted out of line before.
+    """
+    suffix = f' {{{inset}: {placeholder}}}' if inset else ''
+    inset_html = (f' {{<tspan class="key">{inset}</tspan>: '
+                  f'<tspan class="value" id="{inset.lower()[:7]}_data">{placeholder}</tspan>}}') if inset else ''
+    return (f'<tspan x="390" y="{y}" class="cc">. </tspan><tspan class="key">{left_key}</tspan>:'
+            f'<tspan class="cc" id="{left_id}_dots">{layout.dots(left_key, placeholder, layout.L, extra=len(suffix))}</tspan>'
+            f'<tspan class="value" id="{left_id}">{placeholder}</tspan>{inset_html}'
+            f' | <tspan class="key">{right_key}</tspan>:'
+            f'<tspan class="cc" id="{right_id}_dots">{layout.dots(right_key, placeholder, layout.R)}</tspan>'
+            f'<tspan class="value" id="{right_id}">{placeholder}</tspan>')
+
+
 RAMP = ' .:-=+*#%@'  # the art's brightness ramp, dark bg -> space is darkest
-ART_ROWS, ART_COLS = 65, 100  # baselines 30..510 at 7.5px step = text column extent
+ART_ROWS, ART_COLS = 62, 100  # baselines 30..487.5 at 7.5px step = text column extent
 
 
 def resample_art():
@@ -99,36 +124,26 @@ def right_panel():
     r = ['<text x="390" y="30">']
     r.append(f'<tspan x="390" y="30">haider@akbar</tspan> {DASH_LINE}')
     r.append(row(50, ['OS'], 'Windows 11, Android 17, Ubuntu'))
-    r.append(row(70, ['Uptime'], '22 years, 8 months, 20 days', ids='age_data'))
-    r.append(row(90, ['Host'], 'Nysonian Inc. & FRACK Tech.'))
-    r.append(row(110, ['Kernel'], 'AI Automation Engineer'))
-    r.append(row(130, ['IDE'], 'Cursor, Claude Code'))
-    r.append(blank(150))
-    r.append(row(170, ['Languages', 'Programming'], 'Python, TypeScript, SQL'))
-    r.append(row(190, ['Languages', 'Computer'], 'HTML, CSS, JSON, YAML'))
-    r.append(row(210, ['Languages', 'Real'], 'English, Urdu, German'))
-    r.append(blank(230))
-    r.append(row(250, ['Hobbies', 'Software'], 'AI Agents, Workflow Automation'))
-    r.append(row(270, ['Hobbies', 'Hardware'], 'Football, F1, Chess'))
-    r.append(f'<tspan x="390" y="310">{CONTACT_HDR}')
-    r.append(row(330, ['Email'], 'muhammadhaiderakbar@gmail.com'))
-    r.append(row(350, ['Website'], 'haiderakbar.dev'))
-    r.append(row(370, ['LinkedIn'], 'haiderakbar'))
-    r.append(row(390, ['GitHub'], 'muhammadhaider02'))
-    r.append(row(410, ['Location'], 'Islamabad, Pakistan'))
-    r.append(f'<tspan x="390" y="450">{STATS_HDR}')
-    r.append('<tspan x="390" y="470" class="cc">. </tspan><tspan class="key">Repos</tspan>:'
-             '<tspan class="cc" id="repo_data_dots"> ...... </tspan>'
-             '<tspan class="value" id="repo_data">0</tspan> {<tspan class="key">Contributed</tspan>: '
-             '<tspan class="value" id="contrib_data">0</tspan>} | <tspan class="key">Stars</tspan>:'
-             '<tspan class="cc" id="star_data_dots"> ............. </tspan>'
-             '<tspan class="value" id="star_data">0</tspan>')
-    r.append('<tspan x="390" y="490" class="cc">. </tspan><tspan class="key">Commits</tspan>:'
-             '<tspan class="cc" id="commit_data_dots"> ...................... </tspan>'
-             '<tspan class="value" id="commit_data">0</tspan> | <tspan class="key">Followers</tspan>:'
-             '<tspan class="cc" id="follower_data_dots"> ......... </tspan>'
-             '<tspan class="value" id="follower_data">0</tspan>')
-    r.append('<tspan x="390" y="510" class="cc">. </tspan><tspan class="key">Lines of Code</tspan>:'
+    r.append(row(70, ['Host'], 'Nysonian Inc. & FRACK Tech.'))
+    r.append(row(90, ['Kernel'], 'AI Automation Engineer'))
+    r.append(row(110, ['IDE'], 'Cursor, Claude Code'))
+    r.append(blank(130))
+    r.append(row(150, ['Languages', 'Programming'], 'Python, TypeScript, SQL'))
+    r.append(row(170, ['Languages', 'Computer'], 'HTML, CSS, JSON, YAML'))
+    r.append(row(190, ['Languages', 'Real'], 'English, Urdu, German'))
+    r.append(blank(210))
+    r.append(row(230, ['Hobbies', 'Software'], 'AI Agents, Workflow Automation'))
+    r.append(row(250, ['Hobbies', 'Hardware'], 'Football, F1, Chess'))
+    r.append(f'<tspan x="390" y="290">{CONTACT_HDR}')
+    r.append(row(310, ['Email'], 'muhammadhaiderakbar@gmail.com'))
+    r.append(row(330, ['Website'], 'haiderakbar.dev'))
+    r.append(row(350, ['LinkedIn'], 'haiderakbar'))
+    r.append(row(370, ['GitHub'], 'muhammadhaider02'))
+    r.append(row(390, ['Location'], 'Islamabad, Pakistan'))
+    r.append(f'<tspan x="390" y="430">{STATS_HDR}')
+    r.append(stat_row(450, 'Repos', 'repo_data', 'Stars', 'star_data', inset='Contributed'))
+    r.append(stat_row(470, 'Contributions', 'contributions_data', 'Followers', 'follower_data'))
+    r.append('<tspan x="390" y="490" class="cc">. </tspan><tspan class="key">Lines of Code</tspan>:'
              '<tspan class="cc" id="loc_data_dots"> .............. </tspan>'
              '<tspan class="value" id="loc_data">0</tspan> ( <tspan class="addColor" id="loc_add">0</tspan>'
              '<tspan class="addColor">++</tspan>, <tspan id="loc_del_dots"> ...... </tspan>'
@@ -138,7 +153,7 @@ def right_panel():
 
 
 TEMPLATE = """<?xml version='1.0' encoding='UTF-8'?>
-<svg xmlns="http://www.w3.org/2000/svg" font-family="ConsolasFallback,Consolas,monospace" width="985px" height="530px" font-size="16px">
+<svg xmlns="http://www.w3.org/2000/svg" font-family="ConsolasFallback,Consolas,monospace" width="985px" height="510px" font-size="16px">
 <style>
 @font-face {{
 src: local('Consolas'), local('Consolas Bold');
@@ -154,7 +169,7 @@ size-adjust: 109%;
 .cc {{fill: {cc};}}
 text, tspan {{white-space: pre;}}
 </style>
-<rect width="985px" height="530px" fill="{bg}" rx="15"/>
+<rect width="985px" height="510px" fill="{bg}" rx="15"/>
 {art}
 <text x="390" y="30" fill="{fg}">
 {panel}

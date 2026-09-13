@@ -1,5 +1,5 @@
 import datetime
-from dateutil import relativedelta
+import layout
 import requests
 import os
 from lxml import etree
@@ -27,32 +27,8 @@ LEDGER_PATH = 'ledger.txt'
 CACHE_FILE = os.path.join(os.environ.get('RUNNER_TEMP') or tempfile.gettempdir(),
                           'readme-stats-' + hashlib.sha256(USER_NAME.encode('utf-8')).hexdigest()[:16] + '.txt')
 REPO_META = {} # sha256(nameWithOwner) -> (nameWithOwner, is_private, owner_login)
+FORMATTER_LINES = 0 # how many timing lines formatter() has printed, for the cursor rewind
 BOT_IDENTITY = {'name': 'README-Bot', 'email': 'github-actions[bot]@users.noreply.github.com'}
-
-
-def daily_readme(birthday):
-    """
-    Returns the length of time since I was born
-    e.g. 'XX years, XX months, XX days'
-    """
-    diff = relativedelta.relativedelta(datetime.datetime.today(), birthday)
-    return '{} {}, {} {}, {} {}{}'.format(
-        diff.years, 'year' + format_plural(diff.years), 
-        diff.months, 'month' + format_plural(diff.months), 
-        diff.days, 'day' + format_plural(diff.days),
-        ' 🎂' if (diff.months == 0 and diff.days == 0) else '')
-
-
-def format_plural(unit):
-    """
-    Returns a properly formatted number
-    e.g.
-    'day' + format_plural(diff.days) == 5
-    >>> '5 days'
-    'day' + format_plural(diff.days) == 1
-    >>> '1 day'
-    """
-    return 's' if unit != 1 else ''
 
 
 TRANSIENT_ERROR_TYPES = ('SERVICE_UNAVAILABLE', 'RATE_LIMITED')
@@ -125,24 +101,38 @@ def simple_request(func_name, query, variables, on_failure=None):
                     f'({len(request.content)} byte body withheld)', QUERY_COUNT)
 
 
-def graph_commits(start_date, end_date):
+def graph_commits(created_at, stored_years):
     """
-    Uses GitHub's GraphQL v4 API to return my total commit count
+    All-time contributions, plus the per-year figures to store back.
+
+    contributionsCollection accepts at most a one-year window, so all-time means one window
+    per calendar year, aliased into a single request -- which costs 1 rate-limit point in
+    total no matter how many years accumulate.
+
+    Windows start at January 1st of the account's creation year rather than at createdAt:
+    this account has 13 contributions dated before its own creation timestamp, and the
+    profile page's year tabs span whole calendar years, so anchoring to createdAt reports a
+    smaller number than the profile a reader would compare against.
+
+    Each year is floored at its stored value. Closed years are effectively immutable, but the
+    important case is the current one: `restrictedContributionsCount` only counts private
+    contributions while the account shares them, and losing access to a private repo can
+    retract them. Without a floor the headline number would quietly shrink.
     """
     query_count('graph_commits')
-    query = '''
-    query($start_date: DateTime!, $end_date: DateTime!, $login: String!) {
-        user(login: $login) {
-            contributionsCollection(from: $start_date, to: $end_date) {
-                contributionCalendar {
-                    totalContributions
-                }
-            }
-        }
-    }'''
-    variables = {'start_date': start_date,'end_date': end_date, 'login': USER_NAME}
-    request = simple_request(graph_commits.__name__, query, variables)
-    return int(request.json()['data']['user']['contributionsCollection']['contributionCalendar']['totalContributions'])
+    years = list(range(int(created_at[:4]), datetime.datetime.now(datetime.timezone.utc).year + 1))
+    now = datetime.datetime.now(datetime.timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
+    windows = ' '.join(
+        f'y{year}: contributionsCollection(from: "{year}-01-01T00:00:00Z", '
+        f'to: "{now if year == years[-1] else f"{year}-12-31T23:59:59Z"}") '
+        '{ contributionCalendar { totalContributions } }' for year in years)
+    query = 'query($login: String!) { user(login: $login) { ' + windows + ' } }'
+    user = simple_request(graph_commits.__name__, query, {'login': USER_NAME}).json()['data']['user']
+    per_year = {}
+    for year in years:
+        live = int(user[f'y{year}']['contributionCalendar']['totalContributions'])
+        per_year[str(year)] = max(live, int(stored_years.get(str(year), 0)))
+    return sum(per_year.values()), per_year
 
 
 def graph_repos_stars(count_type, owner_affiliation, cursor=None):
@@ -441,16 +431,18 @@ def ledger_load():
     """
     request = requests.get(f'https://api.github.com/repos/{CACHE_REPO}/contents/{LEDGER_PATH}', headers=HEADERS)
     if request.status_code == 404:
-        return {}, None
+        return {}, {}, None
     if request.status_code != 200:
         raise Exception('ledger_load() failed with a', request.status_code)
     body = request.json()
-    records = {}
+    records, years = {}, {}
     for line in base64.b64decode(body['content']).decode('utf-8').splitlines(): # content is line-wrapped base64
         fields = line.split()
-        if len(fields) == 10 and fields[0] == 'repo':
+        if len(fields) == 10 and fields[0] == 'repo': # repo <name> + 8 stat fields
             records[fields[1]] = fields[2:]
-    return records, body['sha']
+        elif len(fields) == 3 and fields[0] == 'year': # year <yyyy> <totalContributions>
+            years[fields[1]] = fields[2]
+    return records, years, body['sha']
 
 
 def ledger_merge(records, live):
@@ -470,11 +462,13 @@ def ledger_merge(records, live):
     return merged
 
 
-def ledger_save(merged, sha):
+def ledger_save(merged, years, sha):
     """PUTs the ledger. Returns False on a 409 so the caller can re-read and re-merge."""
     lines = ['# Per-repo stats for the GitHub profile card. Never commit this to a public repo.',
-             '# repo <nameWithOwner> <commits> <my_commits> <additions> <deletions> <privacy> <owner> <first_seen> <last_seen>']
+             '# repo <nameWithOwner> <commits> <my_commits> <additions> <deletions> <privacy> <owner> <first_seen> <last_seen>',
+             '# year <yyyy> <totalContributions>   (high-water marked; never decreases)']
     lines += [' '.join(['repo', name] + merged[name]) for name in sorted(merged)]
+    lines += [f'year {year} {years[year]}' for year in sorted(years)]
     payload = {'message': 'chore: update stats ledger',
                'content': base64.b64encode(('\n'.join(lines) + '\n').encode('utf-8')).decode('ascii'),
                'committer': BOT_IDENTITY, 'author': BOT_IDENTITY}
@@ -492,7 +486,7 @@ def ledger_save(merged, sha):
 def cache_seed(records, comment_size):
     """
     Writes the local hash-keyed cache file from the name-keyed ledger, so cache_builder,
-    commit_counter and force_close_file keep operating on a plain file exactly as before.
+    and force_close_file keep operating on a plain file exactly as before.
     """
     lines = ['This line is a comment block. Write whatever you want here.\n'] * comment_size
     for name, fields in records.items():
@@ -519,16 +513,21 @@ def cache_live_rows(comment_size):
     return live
 
 
-def ledger_sync(live):
+def ledger_sync(live, live_years):
     """Read, merge, write -- retrying the whole cycle if someone else wrote in between."""
     for _ in range(3):
-        records, sha = ledger_load()
+        records, years, sha = ledger_load()
         merged = ledger_merge(records, live)
+        # Floor every year at its stored value here too, so a concurrent writer's higher
+        # number is never rolled back by this run's re-merge.
+        merged_years = dict(years)
+        for year, total in live_years.items():
+            merged_years[year] = str(max(int(total), int(years.get(year, 0))))
         if len(merged) < len(records):
             raise Exception('ledger_sync(): merge would drop records; refusing to shrink the ledger')
-        if merged == records:
+        if merged == records and merged_years == years:
             return merged, False
-        if ledger_save(merged, sha):
+        if ledger_save(merged, merged_years, sha):
             return merged, True
     raise Exception('ledger_sync(): could not write the ledger after 3 attempts')
 
@@ -561,39 +560,62 @@ def stars_counter(data):
     return total_stars
 
 
-def svg_overwrite(filename, age_data, commit_data, star_data, repo_data, contrib_data, follower_data, loc_data):
+def svg_overwrite(filename, contributions_data, star_data, repo_data, contrib_data, follower_data, loc_data):
     """
-    Parse SVG files and update elements with my age, commits, stars, repositories, and lines written
+    Parse SVG files and update elements with my contributions, stars, repositories, and
+    lines written.
+
+    The two-column stat rows take their widths from layout.py instead of the magic numbers
+    this used to carry, so the '|' separators stay on one column. The Repos field is the
+    awkward one: it shares its column with ' {Contributed: NN}', so its dot count has to
+    account for that text's width -- a fixed length silently misaligned the row whenever
+    Contributed changed digits.
     """
     tree = etree.parse(filename)
     root = tree.getroot()
-    justify_format(root, 'age_data', age_data, 49)
-    justify_format(root, 'commit_data', commit_data, 23)
-    justify_format(root, 'star_data', star_data, 14)
-    justify_format(root, 'repo_data', repo_data, 7)
+    inset = f' {{Contributed: {contrib_data:,}}}'
+    justify_format(root, 'repo_data', repo_data, layout.field_len('Repos', layout.L, extra=len(inset)))
     justify_format(root, 'contrib_data', contrib_data)
-    justify_format(root, 'follower_data', follower_data, 10)
+    justify_format(root, 'star_data', star_data, layout.field_len('Stars', layout.R))
+    justify_format(root, 'contributions_data', contributions_data, layout.field_len('Contributions', layout.L))
+    justify_format(root, 'follower_data', follower_data, layout.field_len('Followers', layout.R))
     justify_format(root, 'loc_data', loc_data[2], 15)
     justify_format(root, 'loc_add', loc_data[0])
-    justify_format(root, 'loc_del', loc_data[1], 7)
+    justify_format(root, 'loc_del', loc_data[1], 7, inline=True)
     tree.write(filename, encoding='utf-8', xml_declaration=True)
 
 
-def justify_format(root, element_id, new_text, length=0):
+def justify_format(root, element_id, new_text, length=0, inline=False):
     """
-    Updates and formats the text of the element, and modifes the amount of dots in the previous element to justify the new text on the svg
+    Updates the element's text and re-pads the dots before it so the field keeps its width.
+
+    length is the combined width of the dots run and the value (layout.field_len computes it
+    for the two-column stat rows). length=0 means the element has no dots sibling at all --
+    contrib_data sits inside the Repos column and loc_add mid-sentence, so neither has one.
+
+    inline=True is for a dots run that sits between literal text rather than filling a
+    column: the Lines of Code row's deletions. There the span has to collapse to nothing
+    when the value grows, instead of keeping its padding spaces.
+
+    For column fields the span is always ' ' + dots + ' '. The old code emitted ''/' '/'. '
+    once just_len fell to 2 or less -- two characters narrower than every other case -- so a
+    column silently shrank by two as soon as a value grew that large, dragging the '|'
+    separators out of line.
     """
     if isinstance(new_text, int):
         new_text = f"{'{:,}'.format(new_text)}"
     new_text = str(new_text)
     find_and_replace(root, element_id, new_text)
-    just_len = max(0, length - len(new_text))
-    if just_len <= 2:
-        dot_map = {0: '', 1: ' ', 2: '. '}
-        dot_string = dot_map[just_len]
-    else:
-        dot_string = ' ' + ('.' * just_len) + ' '
-    find_and_replace(root, f"{element_id}_dots", dot_string)
+    if not length:
+        return
+    just_len = length - len(new_text)
+    if inline:
+        find_and_replace(root, f"{element_id}_dots",
+                         {0: '', 1: ' ', 2: '. '}.get(just_len, ' ' + ('.' * max(just_len, 0)) + ' '))
+        return
+    if just_len < 1:
+        raise Exception(f'justify_format(): {element_id}={new_text!r} overflows its column by {1 - just_len}')
+    find_and_replace(root, f"{element_id}_dots", ' ' + ('.' * just_len) + ' ')
 
 
 def find_and_replace(root, element_id, new_text):
@@ -603,21 +625,6 @@ def find_and_replace(root, element_id, new_text):
     element = root.find(f".//*[@id='{element_id}']")
     if element is not None:
         element.text = new_text
-
-
-def commit_counter(comment_size):
-    """
-    Counts up my total commits, using the cache file created by cache_builder.
-    """
-    total_commits = 0
-    filename = CACHE_FILE # same file cache_builder writes
-    with open(filename, 'r') as f:
-        data = f.readlines()
-    cache_comment = data[:comment_size] # save the comment block
-    data = data[comment_size:] # remove those lines
-    for line in data:
-        total_commits += int(line.split()[2])
-    return total_commits
 
 
 def user_getter(username):
@@ -676,6 +683,8 @@ def formatter(query_type, difference, funct_return=False, whitespace=0):
     Prints a formatted time differential
     Returns formatted result if whitespace is specified, otherwise returns raw result
     """
+    global FORMATTER_LINES
+    FORMATTER_LINES += 1
     print('{:<23}'.format('   ' + query_type + ':'), sep='', end='')
     print('{:>12}'.format('%.4f' % difference + ' s ')) if difference > 1 else print('{:>12}'.format('%.4f' % (difference * 1000) + ' ms'))
     if whitespace:
@@ -692,18 +701,17 @@ if __name__ == '__main__':
     user_data, user_time = perf_counter(user_getter, USER_NAME)
     OWNER_ID, acc_date = user_data
     formatter('account data', user_time)
-    age_data, age_time = perf_counter(daily_readme, datetime.datetime(2003, 10, 21))
-    formatter('age calculation', age_time)
     ledger_guard()
-    ledger_records, _ = ledger_load()
+    ledger_records, ledger_years, _ = ledger_load()
     cache_seed(ledger_records, 7)
     total_loc, loc_time = perf_counter(loc_query, ['OWNER', 'COLLABORATOR', 'ORGANIZATION_MEMBER'], 7)
     formatter('LOC (cached)', loc_time) if total_loc[-1] else formatter('LOC (no cache)', loc_time)
-    # Persist immediately after the walk: this is the only durable copy of the per-repo
-    # figures, and everything after this point can still fail.
-    (ledger, ledger_changed), ledger_time = perf_counter(ledger_sync, cache_live_rows(7))
+    (contributions_data, live_years), contributions_time = perf_counter(graph_commits, acc_date, ledger_years)
+    formatter('contributions', contributions_time)
+    # Persist immediately after the walk: the ledger is the only durable copy of the per-repo
+    # figures and the per-year floors, and everything after this point can still fail.
+    (ledger, ledger_changed), ledger_time = perf_counter(ledger_sync, cache_live_rows(7), live_years)
     formatter('ledger (%d repos%s)' % (len(ledger), ', written' if ledger_changed else ''), ledger_time)
-    commit_data, commit_time = perf_counter(commit_counter, 7)
     star_data, star_time = perf_counter(graph_repos_stars, 'stars', ['OWNER'])
     repo_data, repo_time = perf_counter(graph_repos_stars, 'repos', ['OWNER'])
     contrib_data, contrib_time = perf_counter(graph_repos_stars, 'repos', ['OWNER', 'COLLABORATOR', 'ORGANIZATION_MEMBER'])
@@ -711,13 +719,17 @@ if __name__ == '__main__':
 
     for index in range(len(total_loc)-1): total_loc[index] = '{:,}'.format(total_loc[index]) # format added, deleted, and total LOC
 
-    svg_overwrite('dark_mode.svg', age_data, commit_data, star_data, repo_data, contrib_data, follower_data, total_loc[:-1])
-    svg_overwrite('light_mode.svg', age_data, commit_data, star_data, repo_data, contrib_data, follower_data, total_loc[:-1])
+    svg_overwrite('dark_mode.svg', contributions_data, star_data, repo_data, contrib_data, follower_data, total_loc[:-1])
+    svg_overwrite('light_mode.svg', contributions_data, star_data, repo_data, contrib_data, follower_data, total_loc[:-1])
 
     # move cursor to override 'Calculation times:' with 'Total function time:' and the total function time, then move cursor back
-    print('\033[F\033[F\033[F\033[F\033[F\033[F\033[F\033[F',
-        '{:<21}'.format('Total function time:'), '{:>11}'.format('%.4f' % (user_time + age_time + loc_time + commit_time + star_time + repo_time + contrib_time)),
-        ' s \033[E\033[E\033[E\033[E\033[E\033[E\033[E\033[E', sep='')
+    # Derived from the number of lines formatter() actually printed; the count used to be a
+    # hardcoded run of eight escapes that no longer matched what was on screen.
+    total_time = (user_time + loc_time + contributions_time + ledger_time
+                  + star_time + repo_time + contrib_time + follower_time)
+    print('\033[F' * (FORMATTER_LINES + 1),
+        '{:<21}'.format('Total function time:'), '{:>11}'.format('%.4f' % total_time),
+        ' s ', '\033[E' * (FORMATTER_LINES + 1), sep='')
 
     print('Total GitHub GraphQL API calls:', '{:>3}'.format(sum(QUERY_COUNT.values())))
     for funct_name, count in QUERY_COUNT.items(): print('{:<28}'.format('   ' + funct_name + ':'), '{:>6}'.format(count))
