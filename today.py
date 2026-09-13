@@ -565,11 +565,9 @@ def svg_overwrite(filename, contributions_data, star_data, repo_data, contrib_da
     Parse SVG files and update elements with my contributions, stars, repositories, and
     lines written.
 
-    The two-column stat rows take their widths from layout.py instead of the magic numbers
-    this used to carry, so the '|' separators stay on one column. The Repos field is the
-    awkward one: it shares its column with ' {Contributed: NN}', so its dot count has to
-    account for that text's width -- a fixed length silently misaligned the row whenever
-    Contributed changed digits.
+    Every field takes its width from layout.py rather than the magic numbers this used to
+    carry, so the '|' separators stay on one column no matter how many digits a value grows
+    to. generate_svg.py lays the placeholders out from those same numbers.
     """
     # Entity resolution off: lxml's default would expand a DOCTYPE entity pointing at a local
     # file or URL, and svg_overwrite writes the tree straight back to a file the workflow
@@ -577,34 +575,26 @@ def svg_overwrite(filename, contributions_data, star_data, repo_data, contrib_da
     parser = etree.XMLParser(resolve_entities=False, no_network=True, load_dtd=False, huge_tree=False)
     tree = etree.parse(filename, parser)
     root = tree.getroot()
-    inset = f' {{Contributed: {contrib_data:,}}}'
-    justify_format(root, 'repo_data', repo_data, layout.field_len('Repos', layout.L, extra=len(inset)))
-    justify_format(root, 'contrib_data', contrib_data)
-    justify_format(root, 'star_data', star_data, layout.field_len('Stars', layout.R))
+    justify_format(root, 'repo_data', repo_data, layout.field_len('Repos', layout.L))
+    justify_format(root, 'contrib_data', contrib_data, layout.field_len('Contributed', layout.R))
     justify_format(root, 'contributions_data', contributions_data, layout.field_len('Contributions', layout.L))
+    justify_format(root, 'star_data', star_data, layout.field_len('Stars', layout.R))
+    justify_format(root, 'loc_data', loc_data[2], layout.field_len('Lines of Code', layout.L))
     justify_format(root, 'follower_data', follower_data, layout.field_len('Followers', layout.R))
-    justify_format(root, 'loc_data', loc_data[2], 15)
-    justify_format(root, 'loc_add', loc_data[0])
-    justify_format(root, 'loc_del', loc_data[1], 7, inline=True)
     tree.write(filename, encoding='utf-8', xml_declaration=True)
 
 
-def justify_format(root, element_id, new_text, length=0, inline=False):
+def justify_format(root, element_id, new_text, length=0):
     """
     Updates the element's text and re-pads the dots before it so the field keeps its width.
 
-    length is the combined width of the dots run and the value (layout.field_len computes it
-    for the two-column stat rows). length=0 means the element has no dots sibling at all --
-    contrib_data sits inside the Repos column and loc_add mid-sentence, so neither has one.
+    length is the combined width of the dots run and the value; layout.field_len computes it
+    from the column widths generate_svg.py laid the placeholders out with.
 
-    inline=True is for a dots run that sits between literal text rather than filling a
-    column: the Lines of Code row's deletions. There the span has to collapse to nothing
-    when the value grows, instead of keeping its padding spaces.
-
-    For column fields the span is always ' ' + dots + ' '. The old code emitted ''/' '/'. '
-    once just_len fell to 2 or less -- two characters narrower than every other case -- so a
-    column silently shrank by two as soon as a value grew that large, dragging the '|'
-    separators out of line.
+    The span is always ' ' + dots + ' '. The old code emitted ''/' '/'. ' once just_len fell
+    to 2 or less -- two characters narrower than every other case -- so a column silently
+    shrank by two as soon as a value grew that large, dragging the '|' separators out of
+    line. Overflow raises rather than quietly misaligning.
     """
     if isinstance(new_text, int):
         new_text = f"{'{:,}'.format(new_text)}"
@@ -613,10 +603,6 @@ def justify_format(root, element_id, new_text, length=0, inline=False):
     if not length:
         return
     just_len = length - len(new_text)
-    if inline:
-        find_and_replace(root, f"{element_id}_dots",
-                         {0: '', 1: ' ', 2: '. '}.get(just_len, ' ' + ('.' * max(just_len, 0)) + ' '))
-        return
     if just_len < 1:
         raise Exception(f'justify_format(): {element_id}={new_text!r} overflows its column by {1 - just_len}')
     find_and_replace(root, f"{element_id}_dots", ' ' + ('.' * just_len) + ' ')

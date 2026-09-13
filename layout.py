@@ -11,11 +11,11 @@ moved the separators out of alignment and only the rendered SVG showed it.
 """
 
 ROW_WIDTH = 55  # key + dots + value; excludes '. ', ':' and the two spaces around the dots
-L = 34          # left stats column
-R = 21          # right stats column
+L = 32          # left stats column
+R = 23          # right stats column
 assert L + R == ROW_WIDTH, 'columns must fill the row or the | separators drift'
-# The Lines of Code row is a single full-width field carrying the ++/-- breakdown, so it has
-# no separator and is not bound by L/R. Only the two-column rows above it use them.
+# Chosen to balance the slack: at these widths the tightest field still gets a 7-dot run, so
+# every value can grow several digits before anything has to be re-laid out.
 
 
 def field_len(key, width, extra=0):

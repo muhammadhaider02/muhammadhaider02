@@ -46,24 +46,16 @@ def blank(y):
     return f'<tspan x="390" y="{y}" class="cc">. </tspan>'
 
 
-def stat_row(y, left_key, left_id, right_key, right_id, inset=None, placeholder='0'):
+def stat_row(y, left_key, left_id, right_key, right_id, placeholder='0'):
     """
     One two-column stats line: '. LeftKey: ... value | RightKey: ... value'.
 
     Column widths come from layout, and today.py re-pads the same dot spans from the same
-    numbers when it rewrites the values, so the '|' stays on one column in both rows.
-
-    `inset` is a second key/value pair sharing the left column -- the Repos row carries
-    ' {Contributed: N}' after its value, so that column's dot count must subtract the
-    inset's rendered width. A fixed dot count cannot express that, which is how the
-    separators drifted out of line before.
+    numbers when it rewrites the values, so the '|' stays on one column in every row.
     """
-    suffix = f' {{{inset}: {placeholder}}}' if inset else ''
-    inset_html = (f' {{<tspan class="key">{inset}</tspan>: '
-                  f'<tspan class="value" id="{inset.lower()[:7]}_data">{placeholder}</tspan>}}') if inset else ''
     return (f'<tspan x="390" y="{y}" class="cc">. </tspan><tspan class="key">{left_key}</tspan>:'
-            f'<tspan class="cc" id="{left_id}_dots">{layout.dots(left_key, placeholder, layout.L, extra=len(suffix))}</tspan>'
-            f'<tspan class="value" id="{left_id}">{placeholder}</tspan>{inset_html}'
+            f'<tspan class="cc" id="{left_id}_dots">{layout.dots(left_key, placeholder, layout.L)}</tspan>'
+            f'<tspan class="value" id="{left_id}">{placeholder}</tspan>'
             f' | <tspan class="key">{right_key}</tspan>:'
             f'<tspan class="cc" id="{right_id}_dots">{layout.dots(right_key, placeholder, layout.R)}</tspan>'
             f'<tspan class="value" id="{right_id}">{placeholder}</tspan>')
@@ -141,13 +133,9 @@ def right_panel():
     r.append(row(370, ['GitHub'], 'muhammadhaider02'))
     r.append(row(390, ['Location'], 'Islamabad, Pakistan'))
     r.append(f'<tspan x="390" y="430">{STATS_HDR}')
-    r.append(stat_row(450, 'Repos', 'repo_data', 'Stars', 'star_data', inset='Contributed'))
-    r.append(stat_row(470, 'Contributions', 'contributions_data', 'Followers', 'follower_data'))
-    r.append('<tspan x="390" y="490" class="cc">. </tspan><tspan class="key">Lines of Code</tspan>:'
-             '<tspan class="cc" id="loc_data_dots"> .............. </tspan>'
-             '<tspan class="value" id="loc_data">0</tspan> ( <tspan class="addColor" id="loc_add">0</tspan>'
-             '<tspan class="addColor">++</tspan>, <tspan id="loc_del_dots"> ...... </tspan>'
-             '<tspan class="delColor" id="loc_del">0</tspan><tspan class="delColor">--</tspan> )')
+    r.append(stat_row(450, 'Repos', 'repo_data', 'Contributed', 'contrib_data'))
+    r.append(stat_row(470, 'Contributions', 'contributions_data', 'Stars', 'star_data'))
+    r.append(stat_row(490, 'Lines of Code', 'loc_data', 'Followers', 'follower_data'))
     r.append('</text>')
     return '\n'.join(r)
 
