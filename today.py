@@ -40,20 +40,70 @@ def format_plural(unit):
     return 's' if unit != 1 else ''
 
 
-def simple_request(func_name, query, variables):
+TRANSIENT_ERROR_TYPES = ('SERVICE_UNAVAILABLE', 'RATE_LIMITED')
+TRANSIENT_ERROR_TEXT = ('something went wrong', 'timeout', 'timed out')
+
+
+def body_problem(request):
+    """
+    Inspects a 200 response. Returns None if the body is a clean GraphQL answer, otherwise
+    (is_transient, summary).
+
+    A 200 is not success. GitHub answers query timeouts and rate limits with 200 plus an
+    `errors` array, and can return a non-JSON error page with 200 -- the latter is what
+    killed the 2026-09-11 build. Every caller indexes straight into ['data'], so an
+    unchecked partial answer reads as a real one. That is how a dead token published
+    'Stars: 0' for a month instead of failing.
+
+    The summary carries only error `type` and `path`. Never `message`: it echoes query
+    variables, i.e. private repo names, and this repo's Actions logs are world-readable.
+    """
+    try:
+        body = request.json()
+    except ValueError:
+        return True, f'non-JSON body ({len(request.content)} bytes)'
+    errors = body.get('errors')
+    if not errors:
+        return None
+    transient = any(e.get('type') in TRANSIENT_ERROR_TYPES for e in errors) or any(
+        text in (e.get('message') or '').lower() for e in errors for text in TRANSIENT_ERROR_TEXT)
+    summary = 'errors=[' + ', '.join(
+        "{}@{}".format(e.get('type', '?'), '/'.join(str(p) for p in (e.get('path') or []) )) for e in errors) + ']'
+    return transient, summary
+
+
+def simple_request(func_name, query, variables, on_failure=None):
     """
     Returns a request, or raises an Exception if the response does not succeed.
-    Retries transient gateway errors (502/503/504), which GitHub's GraphQL API
-    returns intermittently on heavy queries like loc_query.
+    Retries transient failures: gateway errors (502/503/504), secondary rate limits that
+    carry a retry-after header, and 200s whose body is a transient GraphQL error.
+
+    on_failure runs immediately before raising -- recursive_loc uses it to flush the cache
+    so a mid-walk crash does not lose the repos already counted.
     """
     for attempt in range(5):
         request = requests.post('https://api.github.com/graphql', json={'query': query, 'variables':variables}, headers=HEADERS)
         if request.status_code == 200:
-            return request
+            problem = body_problem(request)
+            if problem is None:
+                return request
+            transient, summary = problem
+            if transient and attempt < 4:
+                time.sleep(3 * (attempt + 1)) # back off (3s, 6s, 9s, 12s) then retry
+                continue
+            if on_failure: on_failure()
+            raise Exception(func_name, ' returned a 200 carrying', summary, QUERY_COUNT)
         if request.status_code in (502, 503, 504) and attempt < 4:
-            time.sleep(3 * (attempt + 1)) # back off (3s, 6s, 9s, 12s) then retry
+            time.sleep(3 * (attempt + 1))
+            continue
+        # Secondary rate limit (the undocumented anti-abuse limit) answers 403/429 with a
+        # retry-after. Only retry when GitHub actually asks us to -- a 403 without it is an
+        # auth failure and retrying just delays a real error by minutes.
+        if request.status_code in (403, 429) and 'retry-after' in request.headers and attempt < 4:
+            time.sleep(min(int(request.headers['retry-after']), 120))
             continue
         break
+    if on_failure: on_failure()
     # Never include request.text: this repo is public, so Actions logs are world-readable,
     # and GraphQL error bodies echo query variables (repo names) and partial data.
     raise Exception(func_name, ' has failed with a', request.status_code,
@@ -154,26 +204,18 @@ def recursive_loc(owner, repo_name, data, cache_comment, addition_total=0, delet
         }
     }'''
     variables = {'repo_name': repo_name, 'owner': owner, 'cursor': cursor}
-    request = requests.post('https://api.github.com/graphql', json={'query': query, 'variables':variables}, headers=HEADERS) # I cannot use simple_request(), because I want to save the file before raising Exception
-    if request.status_code == 200:
-        try:
-            branch = request.json()['data']['repository']['defaultBranchRef']
-            if branch is None: return (0, 0, 0) # Only count commits if repo isn't empty
-            history = branch['target']['history']
-        except Exception:
-            # A 200 can still carry an HTML body or partial data (this is what broke the
-            # 2026-09-11 build). force_close_file used to sit only on the non-200 path, so
-            # those failures lost the whole walk.
-            force_close_file(data, cache_comment)
-            raise
-        return loc_counter_one_repo(owner, repo_name, data, cache_comment, history, addition_total, deletion_total, my_commits)
-    force_close_file(data, cache_comment) # saves what is currently in the file before this program crashes
-    if request.status_code == 403:
-        raise Exception('Too many requests in a short amount of time!\nYou\'ve hit the non-documented anti-abuse limit!')
-    # Body withheld: GitHub answers an unresolvable repo with "Could not resolve to a
-    # Repository with the name 'owner/name'", which would publish a private repo name.
-    raise Exception('recursive_loc() has failed with a', request.status_code,
-                    f'({len(request.content)} byte body withheld)', QUERY_COUNT)
+    # This used to bypass simple_request purely so the cache could be flushed before
+    # raising; on_failure does that, so the retry and 200-body checks now apply here too.
+    save_progress = lambda: force_close_file(data, cache_comment)
+    request = simple_request(recursive_loc.__name__, query, variables, on_failure=save_progress)
+    try:
+        branch = request.json()['data']['repository']['defaultBranchRef']
+        if branch is None: return (0, 0, 0) # Only count commits if repo isn't empty
+        history = branch['target']['history']
+    except Exception:
+        save_progress() # don't lose the repos already walked
+        raise
+    return loc_counter_one_repo(owner, repo_name, data, cache_comment, history, addition_total, deletion_total, my_commits)
 
 
 def loc_counter_one_repo(owner, repo_name, data, cache_comment, history, addition_total, deletion_total, my_commits):
@@ -230,7 +272,18 @@ def loc_query(owner_affiliation, comment_size=0, force_cache=False, cursor=None,
     variables = {'owner_affiliation': owner_affiliation, 'login': USER_NAME, 'cursor': cursor}
     request = simple_request(loc_query.__name__, query, variables)
     repositories = request.json()['data']['user']['repositories']
-    edges += [edge for edge in repositories['edges'] if edge['node'] is not None] # drop null nodes (fine-grained tokens can't resolve some repos)
+    page = repositories['edges']
+    nulls = sum(1 for edge in page if edge['node'] is None)
+    if nulls:
+        # A null node means totalCount counts a repository the token cannot resolve. Skipping
+        # them is what let a mis-scoped token publish 'Stars: 0' and an undercounted LOC for a
+        # month. Raise before cache_builder writes anything, so a bad token fails the build
+        # instead of quietly shrinking the numbers.
+        # There is nothing to name it by -- the whole node is null, so it has no
+        # nameWithOwner to report. Count and position are all that exist.
+        raise Exception(f'loc_query(): {nulls} of {len(page)} repository nodes came back null '
+                        f'after {len(edges)} resolved; the token cannot see some repositories', QUERY_COUNT)
+    edges += page
     if repositories['pageInfo']['hasNextPage']:   # If repository data has another page
         return loc_query(owner_affiliation, comment_size, force_cache, repositories['pageInfo']['endCursor'], edges)
     else:
