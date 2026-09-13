@@ -156,9 +156,17 @@ def recursive_loc(owner, repo_name, data, cache_comment, addition_total=0, delet
     variables = {'repo_name': repo_name, 'owner': owner, 'cursor': cursor}
     request = requests.post('https://api.github.com/graphql', json={'query': query, 'variables':variables}, headers=HEADERS) # I cannot use simple_request(), because I want to save the file before raising Exception
     if request.status_code == 200:
-        if request.json()['data']['repository']['defaultBranchRef'] != None: # Only count commits if repo isn't empty
-            return loc_counter_one_repo(owner, repo_name, data, cache_comment, request.json()['data']['repository']['defaultBranchRef']['target']['history'], addition_total, deletion_total, my_commits)
-        else: return 0
+        try:
+            branch = request.json()['data']['repository']['defaultBranchRef']
+            if branch is None: return (0, 0, 0) # Only count commits if repo isn't empty
+            history = branch['target']['history']
+        except Exception:
+            # A 200 can still carry an HTML body or partial data (this is what broke the
+            # 2026-09-11 build). force_close_file used to sit only on the non-200 path, so
+            # those failures lost the whole walk.
+            force_close_file(data, cache_comment)
+            raise
+        return loc_counter_one_repo(owner, repo_name, data, cache_comment, history, addition_total, deletion_total, my_commits)
     force_close_file(data, cache_comment) # saves what is currently in the file before this program crashes
     if request.status_code == 403:
         raise Exception('Too many requests in a short amount of time!\nYou\'ve hit the non-documented anti-abuse limit!')
@@ -254,17 +262,42 @@ def cache_builder(edges, comment_size, force_cache, loc_add=0, loc_del=0):
 
     cache_comment = data[:comment_size] # save the comment block
     data = data[comment_size:] # remove those lines
-    for index in range(len(edges)):
-        repo_hash, commit_count, *__ = data[index].split()
-        if repo_hash == hashlib.sha256(edges[index]['node']['nameWithOwner'].encode('utf-8')).hexdigest():
-            try:
-                if int(commit_count) != edges[index]['node']['defaultBranchRef']['target']['history']['totalCount']:
-                    # if commit count has changed, update loc for that repo
-                    owner, repo_name = edges[index]['node']['nameWithOwner'].split('/')
-                    loc = recursive_loc(owner, repo_name, data, cache_comment)
-                    data[index] = repo_hash + ' ' + str(edges[index]['node']['defaultBranchRef']['target']['history']['totalCount']) + ' ' + str(loc[2]) + ' ' + str(loc[0]) + ' ' + str(loc[1]) + '\n'
-            except TypeError: # If the repo is empty
-                data[index] = repo_hash + ' 0 0 0 0\n'
+
+    # Index rows by repo hash rather than trusting row order. flush_cache only fires when
+    # the repo *count* changes, so deleting one repo and creating another leaves the rows
+    # skewed by one: every row after the deleted repo mismatched its edge, failed the hash
+    # check, and was then never updated and never reported. Keying by hash removes that
+    # silent-staleness class, and is a prerequisite for a name-keyed ledger -- pairing
+    # data[index] with edges[index] under a skew would record one repo's LOC and commits
+    # under another repo's name.
+    row_of = {}
+    for i, line in enumerate(data):
+        fields = line.split()
+        if fields: row_of[fields[0]] = i
+
+    for edge in edges:
+        name = edge['node']['nameWithOwner']
+        repo_hash = hashlib.sha256(name.encode('utf-8')).hexdigest()
+        index = row_of.get(repo_hash)
+        if index is None: # repo is new since the last run; add a row for it
+            data.append(repo_hash + ' 0 0 0 0\n')
+            index = row_of[repo_hash] = len(data) - 1
+            cached = False
+        commit_count = data[index].split()[1]
+
+        # An empty repo has no defaultBranchRef. Check it explicitly: the old blanket
+        # `except TypeError` wrapped the recursive_loc call too, so any failure inside it
+        # (null repository, null commit author, a null node) was swallowed and the repo
+        # written as '0 0 0 0' -- zeroing both its commits and its lines of code.
+        branch = edge['node']['defaultBranchRef']
+        if branch is None:
+            data[index] = repo_hash + ' 0 0 0 0\n'
+            continue
+        live_count = branch['target']['history']['totalCount']
+        if int(commit_count) != live_count: # if commit count has changed, update loc for that repo
+            owner, repo_name = name.split('/')
+            loc = recursive_loc(owner, repo_name, data, cache_comment)
+            data[index] = f'{repo_hash} {live_count} {loc[2]} {loc[0]} {loc[1]}\n'
     with open(filename, 'w') as f:
         f.writelines(cache_comment)
         f.writelines(data)
