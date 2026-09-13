@@ -5,6 +5,8 @@ import os
 from lxml import etree
 import time
 import hashlib
+import base64
+import tempfile
 
 # Fine-grained personal access token with All Repositories access:
 # Account permissions: read:Followers, read:Starring, read:Watching
@@ -13,6 +15,19 @@ import hashlib
 HEADERS = {'authorization': 'token '+ os.environ['ACCESS_TOKEN']}
 USER_NAME = os.environ['USER_NAME'] # 'Andrew6rant'
 QUERY_COUNT = {'user_getter': 0, 'follower_getter': 0, 'graph_repos_stars': 0, 'recursive_loc': 0, 'graph_commits': 0, 'loc_query': 0}
+
+# The per-repo stats live in a PRIVATE repo, not this one. This repo is public, so a file
+# here listing every repository the author touches -- with daily per-repo commit and line
+# churn -- discloses an employer's private project names and activity. Keyed by plaintext
+# name in the private ledger so it stays readable years later; sha256 would be one-way.
+CACHE_REPO = os.environ.get('CACHE_REPO', '')
+LEDGER_PATH = 'ledger.txt'
+# Materialised OUTSIDE the repo tree: the workflow's `git add` can then never see it,
+# which makes the privacy guarantee structural instead of a rule someone has to remember.
+CACHE_FILE = os.path.join(os.environ.get('RUNNER_TEMP') or tempfile.gettempdir(),
+                          'readme-stats-' + hashlib.sha256(USER_NAME.encode('utf-8')).hexdigest()[:16] + '.txt')
+REPO_META = {} # sha256(nameWithOwner) -> (nameWithOwner, is_private, owner_login)
+BOT_IDENTITY = {'name': 'README-Bot', 'email': 'github-actions[bot]@users.noreply.github.com'}
 
 
 def daily_readme(birthday):
@@ -260,6 +275,10 @@ def loc_query(owner_affiliation, comment_size=0, force_cache=False, cursor=None,
                 node {
                     ... on Repository {
                         nameWithOwner
+                        isPrivate
+                        owner {
+                            login
+                        }
                         defaultBranchRef {
                             target {
                                 ... on Commit {
@@ -306,7 +325,7 @@ def cache_builder(edges, comment_size, force_cache, loc_add=0, loc_del=0):
     If it has, run recursive_loc on that repository to update the LOC count
     """
     cached = True # Assume all repositories are cached
-    filename = 'cache/'+hashlib.sha256(USER_NAME.encode('utf-8')).hexdigest()+'.txt' # Create a unique filename for each user
+    filename = CACHE_FILE
     try:
         with open(filename, 'r') as f:
             data = f.readlines()
@@ -317,7 +336,13 @@ def cache_builder(edges, comment_size, force_cache, loc_add=0, loc_del=0):
         with open(filename, 'w') as f:
             f.writelines(data)
 
-    if len(data)-comment_size != len(edges) or force_cache: # If the number of repos has changed, or force_cache is True
+    # Only an explicit force_cache wipes the file now. Flushing whenever the repo *count*
+    # changed was safe when rows were read positionally, but it is the opposite of what the
+    # ledger needs: a repo the token can no longer see would be erased along with its
+    # commits and lines. Rows are keyed by hash (see below), so a changed repo set needs no
+    # flush -- new repos are appended and repos that disappear simply keep their last known
+    # values, which is exactly the durability the ledger exists to provide.
+    if force_cache:
         cached = False
         flush_cache(edges, filename, comment_size)
         with open(filename, 'r') as f:
@@ -341,6 +366,9 @@ def cache_builder(edges, comment_size, force_cache, loc_add=0, loc_del=0):
     for edge in edges:
         name = edge['node']['nameWithOwner']
         repo_hash = hashlib.sha256(name.encode('utf-8')).hexdigest()
+        # Remember the name for the ledger: the cache file is hash-keyed, so this is the only
+        # place both the hash and the name are in scope.
+        REPO_META[repo_hash] = (name, edge['node']['isPrivate'], edge['node']['owner']['login'])
         index = row_of.get(repo_hash)
         if index is None: # repo is new since the last run; add a row for it
             data.append(repo_hash + ' 0 0 0 0\n')
@@ -386,12 +414,131 @@ def flush_cache(edges, filename, comment_size):
             f.write(hashlib.sha256(node['node']['nameWithOwner'].encode('utf-8')).hexdigest() + ' 0 0 0 0\n')
 
 
+def ledger_guard():
+    """
+    Refuses to go any further unless CACHE_REPO is a private repo owned by USER_NAME.
+
+    The ledger holds plaintext private repository names. A typo in the env var, a rename, or
+    a repo recreated as public would publish them, so this is checked before the first write
+    rather than trusted.
+    """
+    if not CACHE_REPO:
+        raise Exception('CACHE_REPO is unset; refusing to run without the private stats ledger')
+    request = requests.get(f'https://api.github.com/repos/{CACHE_REPO}', headers=HEADERS)
+    if request.status_code != 200:
+        raise Exception('ledger_guard(): cannot read CACHE_REPO', request.status_code)
+    info = request.json()
+    if not info.get('private'):
+        raise Exception('ledger_guard(): CACHE_REPO is NOT private; refusing to write repository names')
+    if info['owner']['login'].lower() != USER_NAME.lower():
+        raise Exception('ledger_guard(): CACHE_REPO is owned by someone else; refusing to write')
+
+
+def ledger_load():
+    """
+    Returns ({name: [commit_count, my_commits, adds, dels, is_private, owner, first, last]}, blob_sha).
+    A 404 is the normal first-run path, not an error: the file is created by the first PUT.
+    """
+    request = requests.get(f'https://api.github.com/repos/{CACHE_REPO}/contents/{LEDGER_PATH}', headers=HEADERS)
+    if request.status_code == 404:
+        return {}, None
+    if request.status_code != 200:
+        raise Exception('ledger_load() failed with a', request.status_code)
+    body = request.json()
+    records = {}
+    for line in base64.b64decode(body['content']).decode('utf-8').splitlines(): # content is line-wrapped base64
+        fields = line.split()
+        if len(fields) == 10 and fields[0] == 'repo':
+            records[fields[1]] = fields[2:]
+    return records, body['sha']
+
+
+def ledger_merge(records, live):
+    """
+    Folds this run's repos into the ledger. Records are never removed: a repo that drops out
+    of `live` is one the token can no longer see -- access revoked, repo deleted, org
+    membership ended -- and its commits and lines must keep counting. That is the entire
+    point of the ledger.
+    """
+    today = datetime.date.today().isoformat()
+    merged = {name: list(fields) for name, fields in records.items()}
+    for name, stats in live.items():
+        commit_count, my_commits, adds, dels, is_private, owner = stats
+        first_seen = merged[name][6] if name in merged else today
+        merged[name] = [str(commit_count), str(my_commits), str(adds), str(dels),
+                        'private' if is_private else 'public', owner, first_seen, today]
+    return merged
+
+
+def ledger_save(merged, sha):
+    """PUTs the ledger. Returns False on a 409 so the caller can re-read and re-merge."""
+    lines = ['# Per-repo stats for the GitHub profile card. Never commit this to a public repo.',
+             '# repo <nameWithOwner> <commits> <my_commits> <additions> <deletions> <privacy> <owner> <first_seen> <last_seen>']
+    lines += [' '.join(['repo', name] + merged[name]) for name in sorted(merged)]
+    payload = {'message': 'chore: update stats ledger',
+               'content': base64.b64encode(('\n'.join(lines) + '\n').encode('utf-8')).decode('ascii'),
+               'committer': BOT_IDENTITY, 'author': BOT_IDENTITY}
+    if sha: payload['sha'] = sha # omitted on create; required on update
+    request = requests.put(f'https://api.github.com/repos/{CACHE_REPO}/contents/{LEDGER_PATH}',
+                           json=payload, headers=HEADERS)
+    if request.status_code in (200, 201):
+        return True
+    if request.status_code == 409: # stale sha, or a concurrent write
+        return False
+    # Status only. The request body is the base64 ledger: every private repo name in one line.
+    raise Exception('ledger_save() failed with a', request.status_code)
+
+
+def cache_seed(records, comment_size):
+    """
+    Writes the local hash-keyed cache file from the name-keyed ledger, so cache_builder,
+    commit_counter and force_close_file keep operating on a plain file exactly as before.
+    """
+    lines = ['This line is a comment block. Write whatever you want here.\n'] * comment_size
+    for name, fields in records.items():
+        repo_hash = hashlib.sha256(name.encode('utf-8')).hexdigest()
+        REPO_META[repo_hash] = (name, fields[4] == 'private', fields[5])
+        lines.append(f'{repo_hash} {fields[0]} {fields[1]} {fields[2]} {fields[3]}\n')
+    with open(CACHE_FILE, 'w') as f:
+        f.writelines(lines)
+
+
+def cache_live_rows(comment_size):
+    """Reads the cache file back as {name: (commits, my_commits, adds, dels, is_private, owner)}."""
+    live = {}
+    with open(CACHE_FILE, 'r') as f:
+        for line in f.readlines()[comment_size:]:
+            fields = line.split()
+            if len(fields) != 5:
+                continue
+            meta = REPO_META.get(fields[0])
+            if meta is None:
+                continue # hash we never saw a name for this run; the ledger keeps its existing record
+            name, is_private, owner = meta
+            live[name] = (int(fields[1]), int(fields[2]), int(fields[3]), int(fields[4]), is_private, owner)
+    return live
+
+
+def ledger_sync(live):
+    """Read, merge, write -- retrying the whole cycle if someone else wrote in between."""
+    for _ in range(3):
+        records, sha = ledger_load()
+        merged = ledger_merge(records, live)
+        if len(merged) < len(records):
+            raise Exception('ledger_sync(): merge would drop records; refusing to shrink the ledger')
+        if merged == records:
+            return merged, False
+        if ledger_save(merged, sha):
+            return merged, True
+    raise Exception('ledger_sync(): could not write the ledger after 3 attempts')
+
+
 def force_close_file(data, cache_comment):
     """
     Forces the file to close, preserving whatever data was written to it
     This is needed because if this function is called, the program would've crashed before the file is properly saved and closed
     """
-    filename = 'cache/'+hashlib.sha256(USER_NAME.encode('utf-8')).hexdigest()+'.txt'
+    filename = CACHE_FILE
     with open(filename, 'w') as f:
         f.writelines(cache_comment)
         f.writelines(data)
@@ -463,7 +610,7 @@ def commit_counter(comment_size):
     Counts up my total commits, using the cache file created by cache_builder.
     """
     total_commits = 0
-    filename = 'cache/'+hashlib.sha256(USER_NAME.encode('utf-8')).hexdigest()+'.txt' # Use the same filename as cache_builder
+    filename = CACHE_FILE # same file cache_builder writes
     with open(filename, 'r') as f:
         data = f.readlines()
     cache_comment = data[:comment_size] # save the comment block
@@ -547,8 +694,15 @@ if __name__ == '__main__':
     formatter('account data', user_time)
     age_data, age_time = perf_counter(daily_readme, datetime.datetime(2003, 10, 21))
     formatter('age calculation', age_time)
+    ledger_guard()
+    ledger_records, _ = ledger_load()
+    cache_seed(ledger_records, 7)
     total_loc, loc_time = perf_counter(loc_query, ['OWNER', 'COLLABORATOR', 'ORGANIZATION_MEMBER'], 7)
     formatter('LOC (cached)', loc_time) if total_loc[-1] else formatter('LOC (no cache)', loc_time)
+    # Persist immediately after the walk: this is the only durable copy of the per-repo
+    # figures, and everything after this point can still fail.
+    (ledger, ledger_changed), ledger_time = perf_counter(ledger_sync, cache_live_rows(7))
+    formatter('ledger (%d repos%s)' % (len(ledger), ', written' if ledger_changed else ''), ledger_time)
     commit_data, commit_time = perf_counter(commit_counter, 7)
     star_data, star_time = perf_counter(graph_repos_stars, 'stars', ['OWNER'])
     repo_data, repo_time = perf_counter(graph_repos_stars, 'repos', ['OWNER'])

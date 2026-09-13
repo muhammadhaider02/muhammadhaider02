@@ -1,1 +1,9 @@
 __pycache__/
+
+# The per-repo stats cache lives in a private repo now (see CACHE_REPO in today.py).
+# Never track it here: this repo is public and the rows expose private repo activity.
+cache/*.txt
+!cache/requirements.txt
+*.pyc
+.env*
+*.log
