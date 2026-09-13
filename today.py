@@ -130,9 +130,9 @@ def graph_commits(start_date, end_date):
     return int(request.json()['data']['user']['contributionsCollection']['contributionCalendar']['totalContributions'])
 
 
-def graph_repos_stars(count_type, owner_affiliation, cursor=None, add_loc=0, del_loc=0):
+def graph_repos_stars(count_type, owner_affiliation, cursor=None):
     """
-    Uses GitHub's GraphQL v4 API to return my total repository, star, or lines of code count.
+    Uses GitHub's GraphQL v4 API to return my total repository or star count.
     """
     query_count('graph_repos_stars')
     query = '''
@@ -159,11 +159,19 @@ def graph_repos_stars(count_type, owner_affiliation, cursor=None, add_loc=0, del
     }'''
     variables = {'owner_affiliation': owner_affiliation, 'login': USER_NAME, 'cursor': cursor}
     request = simple_request(graph_repos_stars.__name__, query, variables)
-    if request.status_code == 200:
-        if count_type == 'repos':
-            return request.json()['data']['user']['repositories']['totalCount']
-        elif count_type == 'stars':
-            return stars_counter(request.json()['data']['user']['repositories']['edges'])
+    repositories = request.json()['data']['user']['repositories']
+    if count_type == 'repos':
+        # totalCount is already the server-side total for every page. Paginating it would
+        # add the same number once per page.
+        return repositories['totalCount']
+    if count_type == 'stars':
+        # stars_counter only sees one page, and the query asks for 100 at a time, so past
+        # 100 repos the untotalled pages were silently dropped.
+        total_stars = stars_counter(repositories['edges'])
+        if repositories['pageInfo']['hasNextPage']:
+            total_stars += graph_repos_stars('stars', owner_affiliation, repositories['pageInfo']['endCursor'])
+        return total_stars
+    raise Exception(f'graph_repos_stars(): unknown count_type {count_type!r}')
 
 
 def recursive_loc(owner, repo_name, data, cache_comment, addition_total=0, deletion_total=0, my_commits=0, cursor=None):
@@ -234,13 +242,15 @@ def loc_counter_one_repo(owner, repo_name, data, cache_comment, history, additio
     else: return recursive_loc(owner, repo_name, data, cache_comment, addition_total, deletion_total, my_commits, history['pageInfo']['endCursor'])
 
 
-def loc_query(owner_affiliation, comment_size=0, force_cache=False, cursor=None, edges=[]):
+def loc_query(owner_affiliation, comment_size=0, force_cache=False, cursor=None, edges=None):
     """
     Uses GitHub's GraphQL v4 API to query all the repositories I have access to (with respect to owner_affiliation)
     Queries 60 repos at a time, because larger queries give a 502 timeout error and smaller queries send too many
     requests and also give a 502 error.
     Returns the total number of lines of code in all repositories
     """
+    if edges is None: edges = [] # a [] default is shared across calls; a second top-level
+                                 # call would accumulate onto the first one's repos
     query_count('loc_query')
     query = '''
     query ($owner_affiliation: [RepositoryAffiliation], $login: String!, $cursor: String) {
@@ -394,7 +404,12 @@ def stars_counter(data):
     """
     total_stars = 0
     for node in data:
-        if node['node'] is None: continue # fine-grained tokens return a null node for repos they can't resolve
+        if node['node'] is None:
+            # This 'continue' used to be the bug: a token that could not resolve any repo
+            # made every node null, so the sum was 0 and looked like a real answer. 36 stars
+            # were reported as 0 for a month. Same guard as loc_query -- fail, don't skip.
+            raise Exception('stars_counter(): a repository node came back null; '
+                            'the token cannot see some repositories', QUERY_COUNT)
         total_stars += node['node']['stargazers']['totalCount']
     return total_stars
 
