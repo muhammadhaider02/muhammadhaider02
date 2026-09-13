@@ -134,8 +134,8 @@ def right_panel():
     r.append(row(390, ['Location'], 'Islamabad, Pakistan'))
     r.append(f'<tspan x="390" y="430">{STATS_HDR}')
     r.append(stat_row(450, 'Repos', 'repo_data', 'Contributed', 'contrib_data'))
-    r.append(stat_row(470, 'Contributions', 'contributions_data', 'Stars', 'star_data'))
-    r.append(stat_row(490, 'Lines of Code', 'loc_data', 'Followers', 'follower_data'))
+    r.append(stat_row(470, 'Contributions', 'contributions_data', 'Followers', 'follower_data'))
+    r.append(stat_row(490, 'Lines of Code', 'loc_data', 'Stars', 'star_data'))
     r.append('</text>')
     return '\n'.join(r)
 

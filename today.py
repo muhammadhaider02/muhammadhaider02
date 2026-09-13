@@ -578,9 +578,9 @@ def svg_overwrite(filename, contributions_data, star_data, repo_data, contrib_da
     justify_format(root, 'repo_data', repo_data, layout.field_len('Repos', layout.L))
     justify_format(root, 'contrib_data', contrib_data, layout.field_len('Contributed', layout.R))
     justify_format(root, 'contributions_data', contributions_data, layout.field_len('Contributions', layout.L))
-    justify_format(root, 'star_data', star_data, layout.field_len('Stars', layout.R))
-    justify_format(root, 'loc_data', loc_data[2], layout.field_len('Lines of Code', layout.L))
     justify_format(root, 'follower_data', follower_data, layout.field_len('Followers', layout.R))
+    justify_format(root, 'loc_data', loc_data[2], layout.field_len('Lines of Code', layout.L))
+    justify_format(root, 'star_data', star_data, layout.field_len('Stars', layout.R))
     tree.write(filename, encoding='utf-8', xml_declaration=True)
 
 
