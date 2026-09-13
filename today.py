@@ -54,7 +54,10 @@ def simple_request(func_name, query, variables):
             time.sleep(3 * (attempt + 1)) # back off (3s, 6s, 9s, 12s) then retry
             continue
         break
-    raise Exception(func_name, ' has failed with a', request.status_code, request.text, QUERY_COUNT)
+    # Never include request.text: this repo is public, so Actions logs are world-readable,
+    # and GraphQL error bodies echo query variables (repo names) and partial data.
+    raise Exception(func_name, ' has failed with a', request.status_code,
+                    f'({len(request.content)} byte body withheld)', QUERY_COUNT)
 
 
 def graph_commits(start_date, end_date):
@@ -159,7 +162,10 @@ def recursive_loc(owner, repo_name, data, cache_comment, addition_total=0, delet
     force_close_file(data, cache_comment) # saves what is currently in the file before this program crashes
     if request.status_code == 403:
         raise Exception('Too many requests in a short amount of time!\nYou\'ve hit the non-documented anti-abuse limit!')
-    raise Exception('recursive_loc() has failed with a', request.status_code, request.text, QUERY_COUNT)
+    # Body withheld: GitHub answers an unresolvable repo with "Could not resolve to a
+    # Repository with the name 'owner/name'", which would publish a private repo name.
+    raise Exception('recursive_loc() has failed with a', request.status_code,
+                    f'({len(request.content)} byte body withheld)', QUERY_COUNT)
 
 
 def loc_counter_one_repo(owner, repo_name, data, cache_comment, history, addition_total, deletion_total, my_commits):

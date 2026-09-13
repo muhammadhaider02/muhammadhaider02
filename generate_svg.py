@@ -98,7 +98,7 @@ def ascii_block(fg):
 def right_panel():
     r = ['<text x="390" y="30">']
     r.append(f'<tspan x="390" y="30">haider@akbar</tspan> {DASH_LINE}')
-    r.append(row(50, ['OS'], 'Windows 11, Android 16, Ubuntu'))
+    r.append(row(50, ['OS'], 'Windows 11, Android 17, Ubuntu'))
     r.append(row(70, ['Uptime'], '22 years, 8 months, 20 days', ids='age_data'))
     r.append(row(90, ['Host'], 'Nysonian Inc. & FRACK Tech.'))
     r.append(row(110, ['Kernel'], 'AI Automation Engineer'))
